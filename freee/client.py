@@ -62,7 +62,7 @@ class FreeeClient:
             'redirect_uri': self.redirect_uri,
         })
 
-    def refresh_token(self):
+    def token_refresh(self):
         self._get_set_write_token({
             'client_id': self.client_id,
             'client_secret': self.client_secret,

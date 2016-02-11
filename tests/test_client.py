@@ -55,9 +55,7 @@ def test_get_token_by_code():
                   body = json.dumps(res_body),
                   content_type="application/json")
 
-    token_fp = io.StringIO("{\"access_token\": \"my_access_token\","
-                           "\"token_type\": \"my_token_type\","
-                           "\"refresh_token\": \"my_refresh_token\"}")
+    token_fp = io.StringIO("")
     client = FreeeClient(
         'my_client_id',
         'my_client_secret',
@@ -69,6 +67,14 @@ def test_get_token_by_code():
     for attr in ('access_token', 'token_type', 'refresh_token'):
         eq_(res_body[attr], getattr(client, attr))
 
+    token_fp.seek(0)
+    eq_(token_fp.read(),
+        "{\"access_token\": \"my_access_token\", "
+        "\"token_type\": \"bearer\", "
+        "\"expires_in\": 10000, "
+        "\"refresh_token\": \"my_refresh_token\", "
+        "\"scope\": \"read write\"}")
+
     eq_(len(responses.calls), 1)
     req_body = urlparse.parse_qs(responses.calls[0].request.body)
     eq_(req_body, {
@@ -78,6 +84,54 @@ def test_get_token_by_code():
         'code': [auth_code],
         'redirect_uri': ['my_redirect_uri'],
         })
+
+
+@responses.activate
+def test_fresh_token():
+    res_body = {
+        'access_token': 'my_access_token2',
+        'token_type': 'bearer',
+        'expires_in': 10000,
+        'refresh_token': 'my_refresh_token2',
+        'scope': 'read write'
+    }
+
+    responses.add(responses.POST,
+                  "https://secure.freee.co.jp/oauth/token",
+                  status=200,
+                  body = json.dumps(res_body),
+                  content_type="application/json")
+
+    token_fp = io.StringIO("{\"access_token\": \"my_access_token\","
+                           "\"token_type\": \"my_token_type\","
+                           "\"refresh_token\": \"my_refresh_token\"}")
+    client = FreeeClient(
+        'my_client_id',
+        'my_client_secret',
+        'my_redirect_uri',
+        token_fp,
+    )
+    client.token_refresh()
+    for attr in ('access_token', 'token_type', 'refresh_token'):
+        eq_(res_body[attr], getattr(client, attr))
+
+    token_fp.seek(0)
+    eq_(token_fp.read(),
+        "{\"access_token\": \"my_access_token2\", "
+        "\"token_type\": \"bearer\", "
+        "\"expires_in\": 10000, "
+        "\"refresh_token\": \"my_refresh_token2\", "
+        "\"scope\": \"read write\"}")
+
+    eq_(len(responses.calls), 1)
+    req_body = urlparse.parse_qs(responses.calls[0].request.body)
+    eq_(req_body, {
+        'client_id': ['my_client_id'],
+        'client_secret': ['my_client_secret'],
+        'grant_type': ['refresh_token'],
+        'refresh_token': ['my_refresh_token'],
+        })
+
 
 @raises(FreeeAccessTokenNotSet)
 def test_access_token_not_set():
@@ -293,5 +347,3 @@ def test_get_companies():
     eq_(res, companies_body)
     res = client.company(102)
     eq_(res, company_body)
-
-    
