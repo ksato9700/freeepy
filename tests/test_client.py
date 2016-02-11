@@ -6,11 +6,78 @@ from __future__ import print_function, unicode_literals
 
 from freee.client import FreeeClient
 from freee.exception import *
+
+import io
 import responses
 import json
-
+from requests.compat import is_py2
+if is_py2:
+    import urlparse
+else:
+    import urllib.parse as urlparse
 
 from nose.tools import eq_, ok_, raises
+
+def test_get_url():
+    client = FreeeClient(
+        'my_client_id',
+        'my_client_secret',
+        'my_redirect_uri',
+    )
+    eq_(client.get_code_url(),
+        "https://secure.freee.co.jp/oauth/authorize?" +
+        "client_id={}&redirect_uri={}&response_type=code".format(
+            'my_client_id',
+            'my_redirect_uri',
+        ))
+
+    eq_(client.get_token_url(),
+        "https://secure.freee.co.jp/oauth/authorize?" +
+        "client_id={}&redirect_uri={}&response_type=token".format(
+            'my_client_id',
+            'my_redirect_uri',
+        ))
+
+
+@responses.activate
+def test_get_token_by_code():
+    res_body = {
+        'access_token': 'my_access_token',
+        'token_type': 'bearer',
+        'expires_in': 10000,
+        'refresh_token': 'my_refresh_token',
+        'scope': 'read write'
+    }
+
+    responses.add(responses.POST,
+                  "https://secure.freee.co.jp/oauth/token",
+                  status=200,
+                  body = json.dumps(res_body),
+                  content_type="application/json")
+
+    token_fp = io.StringIO("{\"access_token\": \"my_access_token\","
+                           "\"token_type\": \"my_token_type\","
+                           "\"refresh_token\": \"my_refresh_token\"}")
+    client = FreeeClient(
+        'my_client_id',
+        'my_client_secret',
+        'my_redirect_uri',
+        token_fp,
+    )
+    auth_code = 'my_auth_code'
+    client.get_token_by_code(auth_code)
+    for attr in ('access_token', 'token_type', 'refresh_token'):
+        eq_(res_body[attr], getattr(client, attr))
+
+    eq_(len(responses.calls), 1)
+    req_body = urlparse.parse_qs(responses.calls[0].request.body)
+    eq_(req_body, {
+        'client_id': ['my_client_id'],
+        'client_secret': ['my_client_secret'],
+        'grant_type': ['authorization_code'],
+        'code': [auth_code],
+        'redirect_uri': ['my_redirect_uri'],
+        })
 
 @raises(FreeeAccessTokenNotSet)
 def test_access_token_not_set():
@@ -18,20 +85,20 @@ def test_access_token_not_set():
         'my_client_id',
         'my_client_secret',
         'my_redirect_uri',
+        io.StringIO("")
     )
     res = client.me
 
 def _create_client():
+    token_fp = io.StringIO("{\"access_token\": \"my_access_token\","
+                           "\"token_type\": \"my_token_type\","
+                           "\"refresh_token\": \"my_refresh_token\"}")
     client = FreeeClient(
         'my_client_id',
         'my_client_secret',
         'my_redirect_uri',
+        token_fp,
     )
-    client.set_token({
-        'access_token': 'my_access_token',
-        'token_type': 'my_token_type',
-        'refresh_token': 'my_refresh_token',
-    })
     return client
 
 
@@ -123,3 +190,108 @@ def test_add_account_items():
     client = _create_client()
     res = client.add_account_item(req_body)
     eq_(res, res_body)
+
+
+@responses.activate
+def test_get_banks():
+    body = {
+        "banks" : [
+            {
+                "id" : 123,
+                "name" : "〇〇銀行",
+                "type" : "bank_account",
+                "name_kana" : "マルマル"
+            },
+            {
+                "id" : 456,
+                "name" : "△△銀行",
+                "type" : "bank_account",
+                "name_kana" : "サンカク"
+            },
+        ]}
+
+    responses.add(responses.GET,
+                  "https://api.freee.co.jp/api/1/banks",
+                  status=200,
+                  body = json.dumps(body),
+                  content_type="application/json")
+
+    client = _create_client()
+    res = client.banks
+    eq_(res, body)
+
+    
+@responses.activate
+def test_get_companies():
+    body = {
+        "companies" : [
+            {
+                "id" : 101,
+                "name" : "freee事務所",
+                "name_kana" : "フリージムショ",
+                "display_name" : "freee事務所",
+                "role" : "admin"
+            },
+            {
+                "id" : 102,
+                "name" : "freee事務所 2",
+                "name_kana" : "フリージムショ2",
+                "display_name" : "freee事務所2",
+                "role" : "admin"
+            },
+        ]}
+
+    responses.add(responses.GET,
+                  "https://api.freee.co.jp/api/1/companies",
+                  status=200,
+                  body = json.dumps(body),
+                  content_type="application/json")
+
+    client = _create_client()
+    res = client.companies
+    eq_(res, body)
+
+
+@responses.activate
+def test_get_companies():
+    companies_body = {
+        "companies" : [
+            {
+                "id" : 101,
+                "name" : "freee事務所",
+                "name_kana" : "フリージムショ",
+                "display_name" : "freee事務所",
+                "role" : "admin"
+            },
+            {
+                "id" : 102,
+                "name" : "freee事務所 2",
+                "name_kana" : "フリージムショ2",
+                "display_name" : "freee事務所2",
+                "role" : "admin"
+            },
+        ]}
+
+    company_body = {
+        "company": companies_body["companies"][1]
+    }
+
+    responses.add(responses.GET,
+                  "https://api.freee.co.jp/api/1/companies",
+                  status=200,
+                  body = json.dumps(companies_body),
+                  content_type="application/json")
+
+    responses.add(responses.GET,
+                  "https://api.freee.co.jp/api/1/companies/102",
+                  status=200,
+                  body = json.dumps(company_body),
+                  content_type="application/json")
+
+    client = _create_client()
+    res = client.companies
+    eq_(res, companies_body)
+    res = client.company(102)
+    eq_(res, company_body)
+
+    
