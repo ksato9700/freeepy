@@ -5,5 +5,10 @@
 class FreeeException(Exception):
     pass
 
+
 class FreeeAccessTokenNotSet(FreeeException):
+    pass
+
+
+class FreeeResponseError(FreeeException):
     pass

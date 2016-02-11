@@ -5,6 +5,7 @@ from __future__ import print_function
 from .exception import *
 
 import requests
+import json
 
 # import logging
 # logging.basicConfig(level=logging.INFO)
@@ -12,12 +13,21 @@ import requests
 FREEE_AUTH_ENDPOINT_URL = "https://secure.freee.co.jp"
 FREEE_API_ENDPOINT_URL = "https://api.freee.co.jp"
 
+DEFAULT_TOKENFILE = ".freee.token"
 
 class FreeeClient:
-    def __init__(self, client_id, client_secret, redirect_uri):
+    def __init__(self, client_id, client_secret, redirect_uri, token_fp=None):
         self.client_id = client_id
         self.client_secret = client_secret
         self.redirect_uri = redirect_uri
+        self.token_fp = token_fp or open(DEFAULT_TOKENFILE, 'a+')
+
+        try:
+            self.token_fp.seek(0)
+            self._set_token(json.load(self.token_fp))
+        except Exception as e:
+            print(e)
+            pass
 
     def _authz_url(self, response_type):
         return "{}{}?client_id={}&redirect_uri={}&response_type={}".format(
@@ -34,52 +44,63 @@ class FreeeClient:
     def get_token_url(self):
         return self._authz_url('token')
 
-    def get_token_by_code(self, auth_code):
-        r = requests.post(
-            FREEE_AUTH_ENDPOINT_URL + "/oauth/token",
-            data={
-                'client_id': self.client_id,
-                'client_secret': self.client_secret,
-                'grant_type': 'authorization_code',
-                'code': auth_code,
-                'redirect_uri': self.redirect_uri,
-            }
-        )
-        return r.json()
+    def _get_set_write_token(self, data):
+        r = requests.post(FREEE_AUTH_ENDPOINT_URL + "/oauth/token", data=data)
+        r.raise_for_status()
+        rtxt = r.text
+        self.token_fp.seek(0)
+        self.token_fp.truncate()
+        self.token_fp.write(rtxt)
+        self._set_token(json.loads(rtxt))
 
-    def set_token(self, token):
+    def get_token_by_code(self, auth_code):
+        self._get_set_write_token({
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
+            'grant_type': 'authorization_code',
+            'code': auth_code,
+            'redirect_uri': self.redirect_uri,
+        })
+
+    def refresh_token(self):
+        self._get_set_write_token({
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
+            'grant_type': 'refresh_token',
+            'refresh_token': self.refresh_token,
+        })
+
+    def _set_token(self, token):
         self.access_token = token['access_token']
         self.token_type = token['token_type']
         self.refresh_token = token['refresh_token']
 
-    def _get_resource(self, path):
+    def _access_resource(self, method, path, data=None):
         if not hasattr(self, 'access_token'):
             raise FreeeAccessTokenNotSet
-        r = requests.get(
-            FREEE_API_ENDPOINT_URL + path,
-            headers={'Authorization': "Bearer " + self.access_token},
-        )
+
+        url = FREEE_API_ENDPOINT_URL + path
+        headers = {
+            'Authorization': "Bearer " + self.access_token
+        }
+        if data:
+            r = requests.post(url, headers=headers, json=data)
+        else:
+            r = requests.get (url, headers=headers)
+
+        r.raise_for_status()
+
         rj = r.json()
         if 'errors' in rj:
-            print("".join(rj['errors'][0]['messages']))
+            raise FreeeResponseError(rj)
         return rj
 
+
+    def _get_resource(self, path):
+        return self._access_resource(requests.get, path)
+
     def _post_resource(self, path, data):
-        if not hasattr(self, 'access_token'):
-            raise FreeeAccessTokenNotSet
-        r = requests.post(
-            FREEE_API_ENDPOINT_URL + path,
-            headers={
-                'Authorization': "Bearer " + self.access_token,
-            },
-            json=data,
-        )
-        print(r)
-        print(r.text)
-        rj = r.json()
-        if 'errors' in rj:
-            print("".join(rj['errors'][0]['messages']))
-        return rj
+        return self._access_resource(requests.post, path, data)
 
     @property
     def account_items(self):
@@ -95,6 +116,9 @@ class FreeeClient:
     @property
     def companies(self):
         return self._get_resource('/api/1/companies')
+
+    def company(self, id):
+        return self._get_resource('/api/1/companies/{}'.format(id))
 
     @property
     def deals(self):
