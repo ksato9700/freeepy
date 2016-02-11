@@ -68,12 +68,12 @@ def test_get_token_by_code():
         eq_(res_body[attr], getattr(client, attr))
 
     token_fp.seek(0)
-    eq_(token_fp.read(),
-        "{\"access_token\": \"my_access_token\", "
-        "\"token_type\": \"bearer\", "
-        "\"expires_in\": 10000, "
-        "\"refresh_token\": \"my_refresh_token\", "
-        "\"scope\": \"read write\"}")
+    eq_(json.load(token_fp),
+        {'access_token': 'my_access_token',
+         'token_type': 'bearer',
+         'expires_in': 10000,
+         'refresh_token': 'my_refresh_token',
+         'scope': 'read write'})
 
     eq_(len(responses.calls), 1)
     req_body = urlparse.parse_qs(responses.calls[0].request.body)
@@ -116,12 +116,12 @@ def test_fresh_token():
         eq_(res_body[attr], getattr(client, attr))
 
     token_fp.seek(0)
-    eq_(token_fp.read(),
-        "{\"access_token\": \"my_access_token2\", "
-        "\"token_type\": \"bearer\", "
-        "\"expires_in\": 10000, "
-        "\"refresh_token\": \"my_refresh_token2\", "
-        "\"scope\": \"read write\"}")
+    eq_(json.load(token_fp),
+        {'access_token': 'my_access_token2',
+         'token_type': 'bearer',
+         'expires_in': 10000,
+         'refresh_token': 'my_refresh_token2',
+         'scope': 'read write'})
 
     eq_(len(responses.calls), 1)
     req_body = urlparse.parse_qs(responses.calls[0].request.body)
