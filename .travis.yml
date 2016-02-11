@@ -5,5 +5,5 @@ python:
 install: pip install -r requirements.txt
 script:
   - "nosetests --with-coverage --cover-package=freee"
-fter_success:
+after_success:
   - coveralls
