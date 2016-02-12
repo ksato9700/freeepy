@@ -89,12 +89,7 @@ class FreeeClient:
             r = requests.get (url, headers=headers)
 
         r.raise_for_status()
-
-        rj = r.json()
-        if 'errors' in rj:
-            raise FreeeResponseError(rj)
-        return rj
-
+        return r.json()
 
     def _get_resource(self, path):
         return self._access_resource(requests.get, path)
@@ -123,6 +118,9 @@ class FreeeClient:
     @property
     def deals(self):
         return self._get_resource('/api/1/deals')
+
+    def add_deal(self, deal):
+        return self._post_resource('/api/1/deals', deal)
 
     @property
     def items(self):

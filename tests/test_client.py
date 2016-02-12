@@ -245,6 +245,10 @@ def test_add_account_items():
     res = client.add_account_item(req_body)
     eq_(res, res_body)
 
+    eq_(len(responses.calls), 1)
+    r_req_body = json.loads(responses.calls[0].request.body)
+    eq_(r_req_body, req_body)
+
 
 @responses.activate
 def test_get_banks():
@@ -274,7 +278,7 @@ def test_get_banks():
     res = client.banks
     eq_(res, body)
 
-    
+
 @responses.activate
 def test_get_companies():
     body = {
@@ -303,7 +307,7 @@ def test_get_companies():
 
     client = _create_client()
     res = client.companies
-    eq_(res, body)
+    eq_(res, res_body)
 
 
 @responses.activate
@@ -347,3 +351,191 @@ def test_get_companies():
     eq_(res, companies_body)
     res = client.company(102)
     eq_(res, company_body)
+
+
+@responses.activate
+def test_get_deals():
+    deals_body = {
+        "deals" : [
+            {
+                "id" : 101,
+                "company_id" : 1,
+                "issue_date" : "2013-01-01",
+                "due_date" : "2013-02-28",
+                "amount" : 5250,
+                "due_amount" : 0,
+                "type" : "expense",
+                "partner_id" : 201,
+                "ref_number" : "123-456",
+                "details" : [
+                    {
+                        "account_item_id" : 803,
+                        "tax_id" : 14,
+                        "tax_code" : 2,
+                        "item_id" : 501,
+                        "section_id" : 1,
+                        "tag_ids" : [1, 2, 3],
+                        "amount" : 5250,
+                        "vat" : 250,
+                        "description" : "備考"
+                    }
+                ],
+                "payments" : [
+                    {
+                        "date" : "2013-01-28",
+                        "from_walletable_type" : "bank_account",
+                        "from_walletable_id" : 103,
+                        "amount" : 5250
+                    }
+                ]
+            },
+        ]
+    }
+
+    responses.add(responses.GET,
+                  "https://api.freee.co.jp/api/1/deals",
+                  status=200,
+                  body = json.dumps(deals_body),
+                  content_type="application/json")
+
+    client = _create_client()
+    res = client.deals
+    eq_(res, deals_body)
+
+
+@responses.activate
+def test_add_deal():
+    req_body = {
+        "company_id" : 1,
+        "issue_date" : "2013-01-01",
+        "due_date" : "2013-02-28",
+        "type" : "expense",
+        "partner_id" : 201,
+        "ref_number" : "123-456",
+        "details" : [
+            {
+                "account_item_id" : 803,
+                "tax_code" : 6,
+                "item_id" : 501,
+                "section_id" : 1,
+                "tag_ids" : [1, 2, 3],
+                "amount" : 5250,
+                "description" : "備考"
+            }
+        ],
+        "payments" : [
+            {
+                "date" : "2013-01-28",
+                "from_walletable_type" : "bank_account",
+                "from_walletable_id" : 103,
+                "amount" : 5250
+            }
+        ]
+    }
+    res_body = {
+        "deal" : {
+            "id" : 101,
+            "company_id" : 1,
+            "issue_date" : "2013-01-01",
+            "due_date" : "2013-02-28",
+            "amount" : 5250,
+            "due_amount" : 0,
+            "type" : "expense",
+            "partner_id" : 201,
+            "ref_number" : "123-456",
+            "details" : [
+                {
+                    "account_item_id" : 803,
+                    "tax_id" : 14,
+                    "tax_code" : 6,
+                    "item_id" : 501,
+                    "section_id" : 1,
+                    "tag_ids" : [1, 2, 3],
+                    "amount" : 5250,
+                    "vat" : 250,
+                    "description" : "備考"
+                }
+            ],
+            "payments" : [
+                {
+                    "date" : "2013-01-28",
+                    "from_walletable_type" : "bank_account",
+                    "from_walletable_id" : 103,
+                    "amount" : 5250
+                }
+            ]
+        }
+    }
+
+    responses.add(responses.POST,
+                  "https://api.freee.co.jp/api/1/deals",
+                  status=200,
+                  body = json.dumps(res_body),
+                  content_type="application/json")
+
+    client = _create_client()
+    res = client.add_deal(req_body)
+    eq_(res, res_body)
+
+    eq_(len(responses.calls), 1)
+    r_req_body = json.loads(responses.calls[0].request.body)
+    eq_(r_req_body, req_body)
+
+
+@responses.activate
+def test_invalid_request():
+    req_body = {
+        "company_id" : 1,
+        "issue_date" : "2013/01/01",
+        "due_date" : "2013/02/28",
+        "type" : "expense",
+        "partner_id" : 201,
+        "ref_number" : "123-456",
+        "details" : [
+            {
+                "account_item_id" : 803,
+                "tax_code" : 6,
+                "item_id" : 501,
+                "section_id" : 1,
+                "tag_ids" : [1, 2, 3],
+                "amount" : 5250,
+                "description" : "備考"
+            }
+        ],
+        "payments" : [
+            {
+                "date" : "2013/01/28",
+                "from_walletable_type" : "bank_account",
+                "from_walletable_id" : 103,
+                "amount" : 5250
+            }
+        ]
+    }
+
+    res_body = {
+        "status_code" : 400,
+        "errors" : [
+            {
+                "type" : "status",
+                "messages" : ["不正なリクエストです。"]
+            },
+            {
+                "type" : "validation",
+                "messages" : ["Date は不正な日付フォーマットです。入力例：2013-01-01"]
+            }
+        ]
+    }
+
+    responses.add(responses.POST,
+                  "https://api.freee.co.jp/api/1/deals",
+                  status=400,
+                  body = json.dumps(res_body),
+                  content_type="application/json")
+
+    client = _create_client()
+    try:
+        res = client.add_deal(req_body)
+    except Exception as e:
+        eq_(e.response.json(), res_body)
+    else:
+        ok_(False)
